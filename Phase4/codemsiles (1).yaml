@@ -1,0 +1,30 @@
+
+
+
+# Flow of code 
+
+trigger:
+- main
+
+pool:
+ name: local-agent-pool
+
+variables:
+  env: dev 
+  location: eastus
+  subscription: ab9b448f-07ad-4039-b26d-e74b90b60272
+  acrName: myacrname
+  imageName: backend-api
+  terraformVersion: 1.6.3
+
+steps:
+
+- task: AzureCLI@2
+  displayName:  Azure Login 
+  inputs:
+    azureSubscription: independenceday
+    scriptType: bash
+    scriptLocation: inlineScript
+    inlineScript: |
+      echo "Logged in to Azure"
+      az account show
