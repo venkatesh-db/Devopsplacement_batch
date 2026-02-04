@@ -1,0 +1,59 @@
+trigger:
+ - main 
+
+pool:
+  name: local-agent-pool
+
+variables:
+  APP_NAME: "sample-app"
+  ENVIRONMENT: "dev"
+  BUILD_OUTPUT: "$(Build.ArtifactStagingDirectory)/output"
+  PIPELINE_TYPE: "SelfHosted-Enterprise"
+
+stages:
+ 
+- stage: Agentvalidation 
+  displayName: "stage1- agent environment"
+  jobs:
+  - job: ValidateAgent
+    steps:
+    - checkout: self
+
+    - script: |
+        set -e 
+
+        echo "host info"
+        hostname 
+        uname -a 
+
+        echo "simle"
+        date
+
+        echo "date"
+        df -h 
+
+    displayName: "validate self hosting" 
+
+- stage : Toolvalidation 
+  displayName: "stage2 - toolchain "
+  dependsOn: AgentValidation 
+  jobs:
+  - job : ValidateTools
+    steps : 
+    - script: |
+         set -e 
+
+         git --version 
+
+         docker --version || echo "docker is installed"
+
+         python3 --version || echo "python"
+
+         node --version ||echo "node is not installed"
+
+
+      displayName: "validate toolchain"
+
+
+
+

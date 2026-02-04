@@ -1,0 +1,14 @@
+
+trigger:
+    - main 
+
+pool:
+    name: local-agent-pool
+
+steps:
+- script: |
+    echo "hello from ravi bala gang"
+    uname -a 
+    date 
+    displayName: "salem toki gang" 
+

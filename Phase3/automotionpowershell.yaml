@@ -1,0 +1,80 @@
+trigger:
+- main
+
+pool:
+  name: local-agent-pool
+
+variables:
+  vmname: 'DevVM01'
+  resourceGroup: 'DevRG'
+  logpath: '/Users/venkatesh/Logs'
+  cleanupDays: 7
+  diskThresholdPercent: 80
+
+stages:
+- stage: Monitoring
+  displayName: VM Monitoring Stage
+  jobs:
+  - job: ServiceandDiskMonitoring
+    displayName: Service and Disk Monitoring Job
+    steps:
+
+    - task: AzurePowerShell@5
+      displayName: Azure Login, Disk & Storage Monitoring
+      inputs:
+        azureSubscription: 'your-service-connection'
+        ScriptType: 'InlineScript'
+        InlineScript: |
+          Write-Output "Azure DevOps authenticated using Service Connection"
+          $ctx = Get-AzContext
+          Write-Output "Subscription: $($ctx.Subscription.Name)"
+
+          # ---------------------------
+          # VM Metadata
+          # ---------------------------
+          $vm = Get-AzVM -Name "$(vmname)" -ResourceGroupName "$(resourceGroup)"
+          Write-Output "VM Name: $($vm.Name)"
+          Write-Output "VM Location: $($vm.Location)"
+          Write-Output "OS Type: $($vm.StorageProfile.OsDisk.OsType)"
+
+          # ---------------------------
+          # Azure Disk Information
+          # ---------------------------
+          Write-Output "Checking Azure attached disks..."
+          $osDisk = Get-AzDisk -ResourceGroupName "$(resourceGroup)" -DiskName $vm.StorageProfile.OsDisk.Name
+          Write-Output "OS Disk Size (GB): $($osDisk.DiskSizeGB)"
+
+          foreach ($dataDisk in $vm.StorageProfile.DataDisks) {
+              $disk = Get-AzDisk -ResourceGroupName "$(resourceGroup)" -DiskName $dataDisk.Name
+              Write-Output "Data Disk: $($disk.Name) | Size: $($disk.DiskSizeGB) GB"
+          }
+
+          # ---------------------------
+          # OS-Level Disk Space (Windows / Linux)
+          # ---------------------------
+          if ($vm.StorageProfile.OsDisk.OsType -eq "Windows") {
+              Write-Output "Running Windows disk usage check"
+
+              $script = @'
+              Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" |
+              Select-Object DeviceID,
+                            @{Name="TotalGB";Expression={[math]::Round($_.Size/1GB,2)}},
+                            @{Name="FreeGB";Expression={[math]::Round($_.FreeSpace/1GB,2)}},
+                            @{Name="UsedPercent";Expression={[math]::Round((($_.Size-$_.FreeSpace)/$_.Size)*100,2)}}
+              '@
+
+          } else {
+              Write-Output "Running Linux disk usage check"
+
+              $script = @'
+              df -h --output=source,size,used,avail,pcent,target | tail -n +2
+              '@
+          }
+
+          Invoke-AzVMRunCommand `
+            -ResourceGroupName "$(resourceGroup)" `
+            -VMName "$(vmname)" `
+            -CommandId 'RunPowerShellScript' `
+            -ScriptString $script
+
+        azurePowerShellVersion: 'LatestVersion'
