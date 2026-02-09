@@ -1,0 +1,118 @@
+
+trigger:
+  branches:
+    include:
+      - hotfix/*
+
+pool:
+  name: local-agent-pool
+
+variables:
+  APP_NAME: "sample-app"
+  BUILD_OUTPUT: "$(Build.ArtifactStagingDirectory)/hotfix"
+  ERROR_THRESHOLD: 3   # stricter for hotfix
+
+# =========================
+# STAGE 1: HOTFIX CI BUILD
+# =========================
+stages:
+- stage: Hotfix_CI
+  displayName: "HOTFIX - Build & Smoke Test"
+  jobs:
+  - job: BuildHotfix
+    displayName: "Build Hotfix Artifact"
+    steps:
+    - checkout: self
+
+    - script: |
+        set -e
+        echo "🔥 HOTFIX BUILD STARTED"
+        echo "Branch: $(Build.SourceBranchName)"
+
+        mkdir -p $(BUILD_OUTPUT)
+        echo "Hotfix Build $(Build.BuildId)" > $(BUILD_OUTPUT)/$(APP_NAME)
+
+        echo "Running smoke tests..."
+        echo "✔ Basic startup test passed"
+      displayName: "Build & Smoke Test"
+
+    - task: PublishBuildArtifacts@1
+      inputs:
+        pathToPublish: "$(BUILD_OUTPUT)"
+        artifactName: "hotfix-artifact"
+      displayName: "Publish Hotfix Artifact"
+
+# =========================
+# STAGE 2: DEPLOY HOTFIX TO PROD
+# =========================
+- stage: Deploy_Prod_Hotfix
+  displayName: "HOTFIX - Deploy to PROD"
+  dependsOn: Hotfix_CI
+  jobs:
+  - job: DeployProd
+    displayName: "Deploy Hotfix to PROD"
+    steps:
+    - download: current
+      artifact: hotfix-artifact
+
+    - script: |
+        echo "🚨 DEPLOYING HOTFIX TO PROD"
+        echo "No traffic isolation — emergency fix"
+        echo "Deployment completed"
+      displayName: "PROD Hotfix Deployment"
+
+# =========================
+# STAGE 3: POST-DEPLOY MONITORING
+# =========================
+- stage: Monitor_Hotfix
+  displayName: "HOTFIX - Monitoring Window"
+  dependsOn: Deploy_Prod_Hotfix
+  jobs:
+  - job: Monitor
+    displayName: "Monitor Hotfix Metrics"
+    steps:
+    - script: |
+        echo "📊 Monitoring PROD after hotfix"
+
+        ERROR_RATE=$((RANDOM % 6))
+        echo "Observed error rate: $ERROR_RATE%"
+
+        if [ "$ERROR_RATE" -gt "$(ERROR_THRESHOLD)" ]; then
+          echo "❌ Hotfix caused instability"
+          exit 1
+        fi
+
+        echo "✅ Hotfix stable"
+      displayName: "Monitor Error Rate"
+
+# =========================
+# STAGE 4: AUTO ROLLBACK
+# =========================
+- stage: AutoRollback
+  displayName: "HOTFIX - Auto Rollback"
+  dependsOn: Monitor_Hotfix
+  condition: failed()
+  jobs:
+  - job: Rollback
+    displayName: "Rollback Hotfix"
+    steps:
+    - script: |
+        echo "🚨 ROLLING BACK HOTFIX"
+        echo "Previous PROD version restored"
+      displayName: "Execute Rollback"
+
+# =========================
+# STAGE 5: MERGE BACK TO MAIN
+# =========================
+- stage: MergeBack
+  displayName: "HOTFIX - Merge Back to Main"
+  dependsOn: Monitor_Hotfix
+  condition: succeeded()
+  jobs:
+  - job: Merge
+    displayName: "Merge Hotfix Code"
+    steps:
+    - script: |
+        echo "🔁 Merging hotfix back to main"
+        echo "Ensuring no code drift"
+      displayName: "Merge to Main"

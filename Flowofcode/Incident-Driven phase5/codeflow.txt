@@ -1,0 +1,14 @@
+
+PROD Issue
+   ↓
+Create hotfix/INC-123 branch
+   ↓
+Minimal CI (build + smoke)
+   ↓
+Deploy directly to PROD
+   ↓
+Post-deploy monitoring
+   ↓
+Auto rollback if needed
+   ↓
+Merge hotfix → main
